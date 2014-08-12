@@ -19,14 +19,20 @@ getModel =
 innerHTML : Element -> String -> IO ()
 innerHTML e s = setProperty e "innerHTML" s
 
+appendP : Element -> String -> IO ()
+appendP e str =
+  do p <- newElement "p"
+     setText p str
+     appendChild e p
+
 reportError : String -> IO ()
 reportError s =
-  do (Just e) <- !(query "div#error") `elemAt` 0
+  do (Just e) <- !(query "pre#error") `elemAt` 0
      setText e s
 
 clearError : IO ()
 clearError =
-  do (Just e) <- !(query "div#error") `elemAt` 0
+  do (Just e) <- !(query "pre#error") `elemAt` 0
      setText e ""
 
 renderStackElem : Element -> (Term, Term) -> IO ()
@@ -85,6 +91,21 @@ app ev =
             putModel model'
             pure 1
 
+eval' : Event -> IO Int
+eval' ev =
+  do model <- getModel
+     let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
+                     do eval
+                        get
+     case eModel' of
+       (Left err) => do reportError err
+                        pure 1
+       (Right model') =>
+         do -- setValue prompt ""
+            renderModel model'
+            putModel model'
+            pure 1
+
 main : IO ()
 main =
   do p <- newElement "p"
@@ -92,11 +113,13 @@ main =
      Just prompt <- !(query "input#prompt") `elemAt` 0
      Just enterButton <- !(query "input#enter") `elemAt` 0
      Just applyButton <- !(query "input#apply") `elemAt` 0
+     Just evalButton <- !(query "input#eval") `elemAt` 0
      let model = MkModel preludeContext [(TVar $ Name "Nat", TVar $ Name "Type")]
      putModel model
      renderModel model
      onClick enterButton (enter prompt)
      onClick applyButton app
+     onClick evalButton eval'
 
 -- Local Variables:
 -- idris-packages: ("effects" "lightyear" "iquery")

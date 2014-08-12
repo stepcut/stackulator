@@ -39,6 +39,15 @@ ppVar (Dummy)        = "_"
 data Literal
      = LDouble Float
 
+ppLiteral : Literal -> String
+ppLiteral (LDouble d) = show d
+
+data Prim : Type where
+  Plus : Prim
+
+ppPrim : Prim -> String
+ppPrim Plus = "+"
+
 data Term : Type where
   TVar     : Var -> Term
   Universe : Nat -> Term
@@ -46,15 +55,19 @@ data Term : Type where
   Pi       : Var -> Term -> Term -> Term
   Lambda   : Var -> Term -> Term -> Term
   App      : Term -> Term -> Term
+  Lit      : Literal -> Term
+  PrimFn   : Prim -> Term
 
 ppTerm : Term -> String
 ppTerm  (TVar v) = ppVar v
 -- ppTerm (Lit l) = ppLiteral l
-ppTerm (Universe Z) = "Universe"
-ppTerm (Universe n) = "Universe " ++ show n
+ppTerm (Universe Z) = "Type"
+ppTerm (Universe n) = "Type " ++ show n
 ppTerm (Pi v a b) = "forall " ++ ppVar v ++ " : " ++ ppTerm a ++ ". " ++ ppTerm b
 ppTerm (Lambda v x y) = "\\" ++ ppVar v ++ " : " ++ ppTerm x ++ " -> " ++ ppTerm y
 ppTerm (App f x) = "(" ++ ppTerm f ++ " " ++ ppTerm x ++ ")"
+ppTerm (Lit lit) = ppLiteral lit
+ppTerm (PrimFn p) = ppPrim p
 
 inc : InferEff Int
 inc =
@@ -146,6 +159,15 @@ equal         : Context -> Term -> Term -> InferEff Bool
 normalize     : Context -> Term -> InferEff Term
 normalize'    : Context -> Var  -> Term -> Term -> InferEff (Var, Term, Term)
 
+tDouble : Term
+tDouble = TVar (Name "Double")
+
+inferLiteral : Literal -> InferEff Term
+inferLiteral (LDouble _) = return tDouble
+
+inferPrim : Prim -> InferEff Term
+inferPrim Plus = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+
 inferType ctx e =
   case e of
     (TVar x) =>
@@ -172,19 +194,22 @@ inferType ctx e =
            then subst (fromList [(x, e2)]) t
            else raise "inferType: not equal"
 
+    Lit l => inferLiteral l
+    PrimFn p => inferPrim p
+
 inferUniverse ctx t =
-  do u <- inferType ctx t
+  do u  <- inferType ctx t
      u' <- normalize ctx u
      case u' of
        (Universe k) => return k
-       _ => raise "inferUniverse: function expected."
+       _ => raise $ "inferUniverse: type expected. Got: t=" ++ ppTerm t ++ ", u=" ++ ppTerm u' ++ ", u'=" ++ ppTerm u'
 
 inferPi ctx e =
   do t <- inferType ctx e
      t' <- normalize ctx t
      case t' of
        (Pi x s t) => return (x, s, t)
-       _          => raise "inferPi: function expected."
+       _          => raise $ "inferPi: function expected. Got: " ++ ppTerm t'
 
 normalize ctx e =
   case e of
@@ -203,6 +228,13 @@ normalize ctx e =
     Lambda x t e =>
        do (x', t', e') <- normalize' ctx x t e
           return $ Lambda x' t' e'
+    (App (App (PrimFn Plus) e1) e2) =>
+      do e1' <- normalize ctx e1
+         e2' <- normalize ctx e2
+         case (e1', e2') of
+           (Lit (LDouble d1), Lit (LDouble d2)) =>
+              return $ Lit $ LDouble (d1 + d2)
+           _ => return $ App (App (PrimFn Plus) e1') e2'
     (App e1 e2) =>
       do e2' <- normalize ctx e2
          case !(normalize ctx e1) of
@@ -210,6 +242,8 @@ normalize ctx e =
              do e1''' <- subst (fromList [(x, e2')]) e1''
                 normalize ctx e1'''
            e1'' => return $ App e1'' e2'
+
+    (Lit l) => return (Lit l)
 
 normalize' ctx x t e =
   do t' <- normalize ctx t
@@ -247,8 +281,8 @@ runInfer ctx term = run (inferType ctx term)
 runEval : Context -> Term -> Either String Term
 runEval ctx term = run (normalize ctx term)
 
-eval : Context -> Term -> IO ()
-eval ctx term =
+evalIO : Context -> Term -> IO ()
+evalIO ctx term =
   case runEval ctx term of
     (Left err)   => putStrLn $ "error: " ++ err
     (Right term) => putStrLn $ ppTerm term
@@ -261,3 +295,7 @@ typeCheck ctx term =
 
 -- main : IO ()
 -- main = eval preludeContext (TVar $ Name "three")
+
+-- Local Variables:
+-- idris-packages: ("effects")
+-- End:
