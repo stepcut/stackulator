@@ -1,12 +1,14 @@
 module Main
 
-
 import Effect.State
 import Effect.Exception
 import IQuery
 import IQuery.Event
 import Model
 import Stackulator
+
+fromCharCode : Int -> IO String
+fromCharCode cc = mkForeign (FFun "String.fromCharCode(%0)" [FInt] FString) cc
 
 putModel : Model -> IO ()
 putModel model =
@@ -106,20 +108,86 @@ eval' ev =
             putModel model'
             pure 1
 
+cmd'' : ModelEff () -> IO Bool
+cmd'' thecmd =
+  do model <- getModel
+     let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
+                     do thecmd
+                        get
+     case eModel' of
+       (Left err) => do reportError err
+                        return False
+       (Right model') =>
+         do -- setValue prompt ""
+            renderModel model'
+            putModel model'
+            return True
+
+cmd' : ModelEff () -> IO ()
+cmd' thecmd = cmd'' thecmd $> pure ()
+
+cmd : ModelEff () -> Event -> IO Int
+cmd thecmd _ = cmd' thecmd $> pure 1
+
+keyToChar : Key -> IO String
+keyToChar k = fromCharCode (toKeyCode k)
+
+appendText : Element -> String -> IO ()
+appendText e t' =
+  do t <- getText e
+     setText e (t ++ t')
+
+onKeyDown : Element -> IO ()
+onKeyDown prompt =
+  do (Just body) <- !(query "body") `elemAt` 0
+     onEvent KeyDown body $ \ev =>
+             do mk <- key ev
+                case mk of
+                  (Just KeyEnter) => enter prompt ev
+                  (Just k) =>
+                        case !(altKey ev) of
+                           False => pure 1
+                           True  =>
+                             do case k of
+                                  KeyA => do str <- getValue prompt
+                                             if str /= ""
+                                              then do s <- cmd'' $ pushString str
+                                                      if s
+                                                         then do setValue prompt ""
+                                                                 cmd' $ apply
+                                                         else return ()
+                                              else cmd' $ do apply
+                                  KeyE => do cmd' eval
+                                  KeyD => do cmd' drop
+                                  KeyS => do cmd' swap
+                                preventDefault ev
+                                pure 0
+{-
+                  (Just k)        => do c <- keyToChar k
+                                        appendText prompt c
+                                        pure 1
+                                        -}
+                  Nothing         => pure 1
+
 main : IO ()
 main =
   do p <- newElement "p"
      setText p "hello!"
-     Just prompt <- !(query "input#prompt") `elemAt` 0
-     Just enterButton <- !(query "input#enter") `elemAt` 0
-     Just applyButton <- !(query "input#apply") `elemAt` 0
-     Just evalButton <- !(query "input#eval") `elemAt` 0
-     let model = MkModel preludeContext [(TVar $ Name "Nat", TVar $ Name "Type")]
+     Just prompt      <- !(query "input#prompt") `elemAt` 0
+     Just enterButton <- !(query "input#enter")  `elemAt` 0
+     Just applyButton <- !(query "input#apply")  `elemAt` 0
+     Just evalButton  <- !(query "input#eval")   `elemAt` 0
+     Just swapButton  <- !(query "input#swap")   `elemAt` 0
+     Just dropButton  <- !(query "input#drop")   `elemAt` 0
+     let model = MkModel preludeContext []
      putModel model
      renderModel model
+     onKeyDown prompt
      onClick enterButton (enter prompt)
-     onClick applyButton app
-     onClick evalButton eval'
+     onClick applyButton (cmd apply)
+     onClick evalButton  (cmd eval)
+     onClick dropButton  (cmd drop)
+     onClick swapButton  (cmd swap)
 
 -- Local Variables:
 -- idris-packages: ("effects" "lightyear" "iquery")

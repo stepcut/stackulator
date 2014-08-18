@@ -24,6 +24,20 @@ push term =
           (Left err) => raise err
           (Right ty) => put (MkModel ctx ((term, ty) :: terms))
 
+drop : ModelEff ()
+drop =
+  do (MkModel ctx terms) <- get
+     case terms of
+       (t::ts) => put (MkModel ctx ts)
+       _       => raise "empty stack"
+
+swap : ModelEff ()
+swap =
+  do (MkModel ctx terms) <- get
+     case terms of
+       (t1::t2::ts) => put (MkModel ctx (t2::t1::ts))
+       _            => raise "not enough elements on the stack"
+
 dup : ModelEff ()
 dup =
   do (MkModel ctx terms) <- get

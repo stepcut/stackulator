@@ -43,10 +43,16 @@ ppLiteral : Literal -> String
 ppLiteral (LDouble d) = show d
 
 data Prim : Type where
-  Plus : Prim
+  Plus   : Prim
+  Minus  : Prim
+  Times  : Prim
+  Divide : Prim
 
 ppPrim : Prim -> String
-ppPrim Plus = "+"
+ppPrim Plus   = "+"
+ppPrim Minus  = "-"
+ppPrim Times  = "*"
+ppPrim Divide = "/"
 
 data Term : Type where
   TVar     : Var -> Term
@@ -166,7 +172,10 @@ inferLiteral : Literal -> InferEff Term
 inferLiteral (LDouble _) = return tDouble
 
 inferPrim : Prim -> InferEff Term
-inferPrim Plus = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrim Plus   = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrim Minus  = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrim Times  = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrim Divide = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
 
 inferType ctx e =
   case e of
@@ -235,6 +244,29 @@ normalize ctx e =
            (Lit (LDouble d1), Lit (LDouble d2)) =>
               return $ Lit $ LDouble (d1 + d2)
            _ => return $ App (App (PrimFn Plus) e1') e2'
+    (App (App (PrimFn Minus) e1) e2) =>
+      do e1' <- normalize ctx e1
+         e2' <- normalize ctx e2
+         case (e1', e2') of
+           (Lit (LDouble d1), Lit (LDouble d2)) =>
+              return $ Lit $ LDouble (d1 - d2)
+           _ => return $ App (App (PrimFn Minus) e1') e2'
+    (App (App (PrimFn Times) e1) e2) =>
+      do e1' <- normalize ctx e1
+         e2' <- normalize ctx e2
+         case (e1', e2') of
+           (Lit (LDouble d1), Lit (LDouble d2)) =>
+              return $ Lit $ LDouble (d1 * d2)
+           _ => return $ App (App (PrimFn Times) e1') e2'
+
+    (App (App (PrimFn Divide) e1) e2) =>
+      do e1' <- normalize ctx e1
+         e2' <- normalize ctx e2
+         case (e1', e2') of
+           (Lit (LDouble d1), Lit (LDouble d2)) =>
+              return $ Lit $ LDouble (d1 / d2)
+           _ => return $ App (App (PrimFn Divide) e1') e2'
+
     (App e1 e2) =>
       do e2' <- normalize ctx e2
          case !(normalize ctx e1) of

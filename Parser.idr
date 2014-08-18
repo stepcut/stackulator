@@ -25,6 +25,22 @@ pTVar = pure TVar <$> pVar
 someSpace : Parser ()
 someSpace = do satisfy isSpace ; skip (many $ satisfy isSpace) <?> "whitespace"
 
+-- FIXME: handle - and . correctly
+
+pDouble : Parser Literal
+pDouble =
+  do str <- some $ satisfy (\c => c `elem` (unpack $ "1234567890.-"))
+     pure (LDouble $ cast $ pack str)
+
+pLit : Parser Term
+pLit = pure Lit <$> pDouble
+
+pPrim : Parser Term
+pPrim = pure PrimFn <$> ((char '+' $> pure Plus)  <|>
+                         (char '-' $> pure Minus) <|>
+                         (char '*' $> pure Times) <|>
+                         (char '/' $> pure Divide))
+
 pUniverse : Parser Term
 pUniverse =
   do string "Type"
@@ -70,7 +86,7 @@ pApp =
         char ')'
         return (App t1 t2)
 
-pTerm = pUniverse <|> pPi <|> pLambda <|> pApp <|> pTVar
+pTerm = pLit <|> pPrim <|> pUniverse <|> pPi <|> pLambda <|> pApp <|> pTVar
 
 instance Show Term where
   show t = ppTerm t
