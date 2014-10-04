@@ -1,5 +1,7 @@
 module Stackulator
 
+-- http://math.andrej.com/2012/11/08/how-to-implement-dependent-type-theory-i/
+
 import Control.Monad.State
 import Data.SortedMap
 import Effect.State
@@ -42,17 +44,17 @@ data Literal
 ppLiteral : Literal -> String
 ppLiteral (LDouble d) = show d
 
-data Prim : Type where
-  Plus   : Prim
-  Minus  : Prim
-  Times  : Prim
-  Divide : Prim
+data Primitive : Type where
+  Plus   : Primitive
+  Minus  : Primitive
+  Times  : Primitive
+  Divide : Primitive
 
-ppPrim : Prim -> String
-ppPrim Plus   = "+"
-ppPrim Minus  = "-"
-ppPrim Times  = "*"
-ppPrim Divide = "/"
+ppPrimitive : Primitive -> String
+ppPrimitive Plus   = "+"
+ppPrimitive Minus  = "-"
+ppPrimitive Times  = "*"
+ppPrimitive Divide = "/"
 
 data Term : Type where
   TVar     : Var -> Term
@@ -62,7 +64,7 @@ data Term : Type where
   Lambda   : Var -> Term -> Term -> Term
   App      : Term -> Term -> Term
   Lit      : Literal -> Term
-  PrimFn   : Prim -> Term
+  Prim     : Primitive -> Term
 
 ppTerm : Term -> String
 ppTerm  (TVar v) = ppVar v
@@ -70,10 +72,10 @@ ppTerm  (TVar v) = ppVar v
 ppTerm (Universe Z) = "Type"
 ppTerm (Universe n) = "Type " ++ show n
 ppTerm (Pi v a b) = "forall " ++ ppVar v ++ " : " ++ ppTerm a ++ ". " ++ ppTerm b
-ppTerm (Lambda v x y) = "\\" ++ ppVar v ++ " : " ++ ppTerm x ++ " -> " ++ ppTerm y
+ppTerm (Lambda v x y) = "\\" ++ ppVar v ++ " : " ++ ppTerm x ++ " => " ++ ppTerm y
 ppTerm (App f x) = "(" ++ ppTerm f ++ " " ++ ppTerm x ++ ")"
 ppTerm (Lit lit) = ppLiteral lit
-ppTerm (PrimFn p) = ppPrim p
+ppTerm (Prim p) = ppPrimitive p
 
 inc : InferEff Int
 inc =
@@ -104,6 +106,7 @@ preludeContext = Ctx $ fromList
  , (Name "s", (Pi Dummy (TVar (Name "Nat")) (TVar (Name "Nat")), Nothing))
  , (Name "three", (TVar (Name "Nat"), Just (App (TVar (Name "s")) (App (TVar (Name "s")) (App (TVar (Name "s")) (TVar (Name "z")))))))
  , (Name "Double", (Universe 0, Nothing))
+ , (Name "id", (Pi (Name "a") (Universe 0) (Pi (Name "x") (TVar (Name "a")) (TVar (Name "x"))), Just (Lambda (Name "a") (Universe 0) (Lambda (Name "x") (TVar (Name "a")) (TVar (Name "x"))))))
  ]
 
 pc : SortedMap Var (Term, Maybe Term)
@@ -171,11 +174,11 @@ tDouble = TVar (Name "Double")
 inferLiteral : Literal -> InferEff Term
 inferLiteral (LDouble _) = return tDouble
 
-inferPrim : Prim -> InferEff Term
-inferPrim Plus   = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
-inferPrim Minus  = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
-inferPrim Times  = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
-inferPrim Divide = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrimitive : Primitive -> InferEff Term
+inferPrimitive Plus   = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrimitive Minus  = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrimitive Times  = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrimitive Divide = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
 
 inferType ctx e =
   case e of
@@ -201,17 +204,17 @@ inferType ctx e =
          te <- inferType ctx e2
          if !(equal ctx s te)
            then subst (fromList [(x, e2)]) t
-           else raise "inferType: not equal"
+           else raise ("inferType:\nexpected type: " ++ ppTerm s ++ "\ninferred type: " ++ ppTerm te)
 
     Lit l => inferLiteral l
-    PrimFn p => inferPrim p
+    Prim p => inferPrimitive p
 
 inferUniverse ctx t =
   do u  <- inferType ctx t
      u' <- normalize ctx u
      case u' of
        (Universe k) => return k
-       _ => raise $ "inferUniverse: type expected. Got: t=" ++ ppTerm t ++ ", u=" ++ ppTerm u' ++ ", u'=" ++ ppTerm u'
+       _ => raise $ "inferUniverse: type expected. Got: t=" ++ ppTerm t ++ ", u=" ++ ppTerm u ++ ", u'=" ++ ppTerm u'
 
 inferPi ctx e =
   do t <- inferType ctx e
@@ -237,35 +240,35 @@ normalize ctx e =
     Lambda x t e =>
        do (x', t', e') <- normalize' ctx x t e
           return $ Lambda x' t' e'
-    (App (App (PrimFn Plus) e1) e2) =>
+    (App (App (Prim Plus) e1) e2) =>
       do e1' <- normalize ctx e1
          e2' <- normalize ctx e2
          case (e1', e2') of
            (Lit (LDouble d1), Lit (LDouble d2)) =>
               return $ Lit $ LDouble (d1 + d2)
-           _ => return $ App (App (PrimFn Plus) e1') e2'
-    (App (App (PrimFn Minus) e1) e2) =>
+           _ => return $ App (App (Prim Plus) e1') e2'
+    (App (App (Prim Minus) e1) e2) =>
       do e1' <- normalize ctx e1
          e2' <- normalize ctx e2
          case (e1', e2') of
            (Lit (LDouble d1), Lit (LDouble d2)) =>
               return $ Lit $ LDouble (d1 - d2)
-           _ => return $ App (App (PrimFn Minus) e1') e2'
-    (App (App (PrimFn Times) e1) e2) =>
+           _ => return $ App (App (Prim Minus) e1') e2'
+    (App (App (Prim Times) e1) e2) =>
       do e1' <- normalize ctx e1
          e2' <- normalize ctx e2
          case (e1', e2') of
            (Lit (LDouble d1), Lit (LDouble d2)) =>
               return $ Lit $ LDouble (d1 * d2)
-           _ => return $ App (App (PrimFn Times) e1') e2'
+           _ => return $ App (App (Prim Times) e1') e2'
 
-    (App (App (PrimFn Divide) e1) e2) =>
+    (App (App (Prim Divide) e1) e2) =>
       do e1' <- normalize ctx e1
          e2' <- normalize ctx e2
          case (e1', e2') of
            (Lit (LDouble d1), Lit (LDouble d2)) =>
               return $ Lit $ LDouble (d1 / d2)
-           _ => return $ App (App (PrimFn Divide) e1') e2'
+           _ => return $ App (App (Prim Divide) e1') e2'
 
     (App e1 e2) =>
       do e2' <- normalize ctx e2
