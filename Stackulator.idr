@@ -4,24 +4,29 @@ module Stackulator
 
 import Control.Monad.State
 import Data.SortedMap
+import Effects
 import Effect.State
 import Effect.Exception
 
 InferEff : Type -> Type
-InferEff t = { [EXCEPTION String, STATE Int] } Eff t
+-- InferEff t = { [EXCEPTION String, STATE Int] } Eff t
+InferEff t = Eff t [STATE Int, EXCEPTION String]
 
+public export
 data Var : Type where
   Name    : String -> Var
   GenName : String -> Int -> Var
   Dummy   : Var
 
-instance Eq Var where
+public export
+implementation Eq Var where
   (Name n1) == (Name n2) = n1 == n2
   (GenName n1 i1) == (GenName n2 i2) = (n1 == n2) && (i1 == i2)
   Dummy == Dummy = True
   _ == _ = False
 
-instance Ord Var where
+public export
+implementation Ord Var where
   compare x y =
         if x == y then EQ else
           case (x, y) of
@@ -38,12 +43,14 @@ ppVar (Name s)      = s
 ppVar (GenName s i) = s ++ show i
 ppVar (Dummy)        = "_"
 
+public export
 data Literal
-     = LDouble Float
+     = LDouble Double
 
 ppLiteral : Literal -> String
 ppLiteral (LDouble d) = show d
 
+public export
 data Primitive : Type where
   Plus   : Primitive
   Minus  : Primitive
@@ -56,6 +63,7 @@ ppPrimitive Minus  = "-"
 ppPrimitive Times  = "*"
 ppPrimitive Divide = "/"
 
+public export
 data Term : Type where
   TVar     : Var -> Term
   Universe : Nat -> Term
@@ -66,6 +74,7 @@ data Term : Type where
   Lit      : Literal -> Term
   Prim     : Primitive -> Term
 
+export
 ppTerm : Term -> String
 ppTerm  (TVar v)      = ppVar v
 ppTerm (Universe Z)   = "Type"
@@ -89,24 +98,26 @@ ppStatement (Assume v t) = "assume " ++ ppVar v ++ " : " ++ ppTerm t
 ppStatement (Forget v)   = "forget " ++ ppVar v
 ppStatement (STerm t)    = ppTerm t
 
-inc : InferEff Int
+inc : Eff Int [STATE Int]
 inc =
   do n <- get
      let n' = n + 1
      put n'
-     return n'
+     pure n'
 
-fresh : Var -> InferEff Var
+fresh : Var -> Eff Var [STATE Int]
 fresh v =
   do k <- inc
      case v of
-          (Name n)       => return (GenName n k)
-          (GenName n _ ) => return (GenName n k)
-          Dummy          => return (GenName "_" k)
+          (Name n)       => pure (GenName n k)
+          (GenName n _ ) => pure (GenName n k)
+          Dummy          => pure (GenName "_" k)
 
+public export
 data Context : Type where
      Ctx : SortedMap Var (Term, Maybe Term) -> Context
 
+public export
 emptyContext : Context
 emptyContext =
   Ctx empty
@@ -146,8 +157,8 @@ extend : Var -> Term -> Maybe Term -> Context -> Context
 extend x t val (Ctx ctx) =
   Ctx (insert x (t, val) ctx)
 
-subst : SortedMap Var Term -> Term -> InferEff Term
-subst' : SortedMap Var Term -> Var -> Term -> Term -> InferEff (Var, Term, Term)
+subst : SortedMap Var Term -> Term -> Eff Term [STATE Int]
+subst' : SortedMap Var Term -> Var -> Term -> Term -> Eff (Var, Term, Term) [STATE Int]
 
 subst vars e =
   case e of
@@ -173,24 +184,26 @@ subst' vars x t e =
      e' <- subst (insert x (TVar x') vars) e
      return (x', t', e')
 
-inferType : Context -> Term -> InferEff Term
-inferUniverse : Context -> Term -> InferEff Nat
-inferPi       : Context -> Term -> InferEff (Var, Term, Term)
-equal         : Context -> Term -> Term -> InferEff Bool
-normalize     : Context -> Term -> InferEff Term
-normalize'    : Context -> Var  -> Term -> Term -> InferEff (Var, Term, Term)
+export
+inferType : Context -> Term -> Eff Term [STATE Int, EXCEPTION String]
+inferUniverse : Context -> Term -> Eff Nat [STATE Int, EXCEPTION String]
+inferPi       : Context -> Term -> Eff (Var, Term, Term) [STATE Int, EXCEPTION String]
+equal         : Context -> Term -> Term -> Eff Bool [STATE Int, EXCEPTION String]
+export
+normalize     : Context -> Term -> Eff Term [STATE Int, EXCEPTION String]
+normalize'    : Context -> Var  -> Term -> Term -> Eff (Var, Term, Term) [STATE Int, EXCEPTION String]
 
 tDouble : Term
 tDouble = TVar (Name "Double")
 
-inferLiteral : Literal -> InferEff Term
-inferLiteral (LDouble _) = return tDouble
+inferLiteral : Literal -> Eff Term [STATE Int]
+inferLiteral (LDouble _) = pure tDouble
 
-inferPrimitive : Primitive -> InferEff Term
-inferPrimitive Plus   = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
-inferPrimitive Minus  = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
-inferPrimitive Times  = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
-inferPrimitive Divide = return $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrimitive : Primitive -> Eff Term [STATE Int]
+inferPrimitive Plus   = pure $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrimitive Minus  = pure $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrimitive Times  = pure $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
+inferPrimitive Divide = pure $ Pi Dummy tDouble (Pi Dummy tDouble tDouble)
 
 inferType ctx e =
   case e of
@@ -322,9 +335,11 @@ equal ctx e1 e2 =
          b2  <- equal' e1 e2'
          return (b1 && b2)
 
+export
 runInfer : Context -> Term -> Either String Term
 runInfer ctx term = run (inferType ctx term)
 
+export
 runEval : Context -> Term -> Either String Term
 runEval ctx term = run (normalize ctx term)
 

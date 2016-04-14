@@ -36,14 +36,18 @@ How are parens handled?
 
 -}
 
-import Control.Monad.Identity
+
 import Data.List
 import Lightyear.Core
+import Lightyear.Char
 import Lightyear.Combinators
 import Lightyear.Strings
 import Stackulator
+import Effects 
 
-%access public
+import Control.Monad.Identity
+
+%access public export
 
 ||| parse a `Term`
 pTerm : Parser Term
@@ -57,14 +61,15 @@ reserved = ["let", "forall", "=>", "Type"]
 ||| parse a `Var`
 pVar : Parser Var
 pVar =
-  do v <- pure pack <$> (some $ satisfy (\c => not (c `elem` specials)))
+  do v <- pure pack <*!> (some $ satisfy (\c => not (c `elem` specials)))
      if (v `elem` reserved)
       then fail $ v ++ " is a reserved keyword"
       else commitTo (return (Name v))
 
+
 ||| parse a `Var` and lift it to a `Term`
 pTVar : Parser Term
-pTVar = pure TVar <$> pVar
+pTVar = pure TVar <*!> pVar
 
 -- ||| skip 
 -- manySpace : Parser ()
@@ -86,19 +91,19 @@ pLiteral = pDouble
 
 ||| parse a `Literal` and lift it to a `Term`
 pLit : Parser Term
-pLit = pure Lit <$> pLiteral
+pLit = pure Lit <*!> pLiteral
 
 ||| parse `Primitive`
 pPrimitive : Parser Primitive
 pPrimitive =
-        (char '+' $> pure Plus)  <|>
-        (char '-' $> pure Minus) <|>
-        (char '*' $> pure Times) <|>
-        (char '/' $> pure Divide)
+        ((char '+') *!> pure Plus)  <|>
+        ((char '-') *!> pure Minus) <|>
+        ((char '*') *!> pure Times) <|>
+        ((char '/') *!> pure Divide)
 
 ||| parse `Primitive` and lift to `Term`
 pPrim : Parser Term
-pPrim = pure Prim <$> pPrimitive
+pPrim = pure Prim <*!> pPrimitive
 
 
 ||| parse a `Universe` `Term`
@@ -129,14 +134,14 @@ pPi =
 
 ||| parse a `Lambda` `Term`
 pLambda : Parser Term
+
 pLambda =
-  do string "\\"
-     vtys <- commitTo $ some $ do
-                           space
-                           v <- pVar <$ space
-                           colon
-                           ty <- commitTo $ pTerm
-                           return (v, ty)
+  do -- string "\\"
+     vtys <- commitTo $ some $ do space
+                                  v <- pVar <*! space
+                                  colon
+                                  ty <- commitTo $ pTerm
+                                  pure (v, ty)
      space
 --     string "=>"
      commitTo $ char '.'
@@ -155,7 +160,7 @@ pApp =
 
 pTerm = pPrim <|> pUniverse <|> pPi <|> pLit <|> pTVar <|> pLambda <|> pApp
 
-instance Show Term where
+implementation Show Term where
   show t = ppTerm t
 
 pLet : Parser Statement
@@ -189,13 +194,14 @@ pStatement =
  pLet <|> pAssume <|> pForget <|> (pure STerm <$> pTerm)
 
 ||| run a `Parser` ensuring that the entire `String` is consumed
+public export
 parseAll : Parser a -> String -> Either String a
 parseAll f s = let Id r = execParserT f s in case r of
   Success i x =>
     case length i of
      Z => Right x
      _ => Left $ "Incomplete parse: " ++ i
-  Failure es  => Left $ formatError s es
+  Failure es  => Left "Parsing error" -- Left $ formatError s es
 
 prs : Parser Term -> String -> String
 prs p str = case parseAll p str of
@@ -213,9 +219,9 @@ testp p s =
 test : String -> IO ()
 test s = testp pTerm s
 
-instance (Show l, Show r)  => Show (Either l r) where
-    show (Left l)  = "Left "  ++ show l
-    show (Right r) = "Right " ++ show r
+-- implementation (Show l, Show r)  => Show (Either l r) where
+--    show (Left l)  = "Left "  ++ show l
+--    show (Right r) = "Right " ++ show r
 
 -- Local Variables:
 -- idris-packages: ("effects" "lightyear")
