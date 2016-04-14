@@ -1,43 +1,47 @@
 module Main
 
+import Control.Monad.Identity
+import Effects
 import Effect.State
 import Effect.Exception
 import IQuery
+import IQuery.Elements
 import IQuery.Event
+import IQuery.Key
 import Model
 import Stackulator
 
-fromCharCode : Int -> IO String
-fromCharCode cc = mkForeign (FFun "String.fromCharCode(%0)" [FInt] FString) cc
+fromCharCode : Int -> JS_IO String
+fromCharCode cc = jscall "String.fromCharCode(%0)" (Int -> JS_IO String) cc
 
-putModel : Model -> IO ()
+putModel : Model -> JS_IO ()
 putModel model =
-  mkForeign (FFun "model = %0" [FAny Model] FUnit) model
+  jscall "model = %0" (Ptr -> JS_IO ()) (believe_me model)
 
-getModel : IO Model
+getModel : JS_IO Model
 getModel =
-  mkForeign (FFun "model" [] (FAny Model))
+  believe_me <$> jscall "model" (JS_IO Ptr)
 
-innerHTML : Element -> String -> IO ()
+innerHTML : Element -> String -> JS_IO ()
 innerHTML e s = setProperty e "innerHTML" s
 
-appendP : Element -> String -> IO ()
+appendP : Element -> String -> JS_IO ()
 appendP e str =
   do p <- newElement "p"
      setText p str
      appendChild e p
 
-reportError : String -> IO ()
+reportError : String -> JS_IO ()
 reportError s =
   do (Just e) <- !(query "pre#error") `elemAt` 0
      setText e s
 
-clearError : IO ()
+clearError : JS_IO ()
 clearError =
   do (Just e) <- !(query "pre#error") `elemAt` 0
      setText e ""
 
-renderStackElem : Element -> (Term, Term) -> IO ()
+renderStackElem : Element -> (Term, Term) -> JS_IO ()
 renderStackElem parent (e, ty) =
  do rowDiv <- newElement "div"
     setAttribute rowDiv "class" "row"
@@ -55,17 +59,18 @@ renderStackElem parent (e, ty) =
 
     appendChild parent rowDiv
 
-renderModel : Model -> IO ()
+renderModel : Model -> JS_IO ()
 renderModel (MkModel _ stack) =
    do Just stackDiv <- !(query "div#stack") `elemAt` 0
       innerHTML stackDiv ""
       clearError
       traverse_ (renderStackElem stackDiv) (reverse stack)
 
-enter : Element -> Event -> IO Int
+enter : Element -> Event -> JS_IO Int
 enter prompt ev =
   do model <- getModel
      str <- getValue prompt
+     a <- runInit () ()
      let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
                      do pushString str
                         get
@@ -77,8 +82,8 @@ enter prompt ev =
             renderModel model'
             putModel model'
             pure 1
-
-app : Event -> IO Int
+{-
+app : Event -> JS_IO Int
 app ev =
   do model <- getModel
      let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
@@ -93,7 +98,7 @@ app ev =
             putModel model'
             pure 1
 
-eval' : Event -> IO Int
+eval' : Event -> JS_IO Int
 eval' ev =
   do model <- getModel
      let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
@@ -108,7 +113,7 @@ eval' ev =
             putModel model'
             pure 1
 
-cmd'' : ModelEff () -> IO Bool
+cmd'' : ModelEff () -> JS_IO Bool
 cmd'' thecmd =
   do model <- getModel
      let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
@@ -123,21 +128,21 @@ cmd'' thecmd =
             putModel model'
             return True
 
-cmd' : ModelEff () -> IO ()
-cmd' thecmd = cmd'' thecmd $> pure ()
+cmd' : ModelEff () -> JS_IO ()
+cmd' thecmd = cmd'' thecmd *> pure ()
 
-cmd : ModelEff () -> Event -> IO Int
-cmd thecmd _ = cmd' thecmd $> pure 1
+cmd : ModelEff () -> Event -> JS_IO Int
+cmd thecmd _ = cmd' thecmd *> pure 1
 
-keyToChar : Key -> IO String
+keyToChar : Key -> JS_IO String
 keyToChar k = fromCharCode (toKeyCode k)
 
-appendText : Element -> String -> IO ()
+appendText : Element -> String -> JS_IO ()
 appendText e t' =
   do t <- getText e
      setText e (t ++ t')
 
-onKeyDown : Element -> IO ()
+onKeyDown : Element -> JS_IO ()
 onKeyDown prompt =
   do (Just body) <- !(query "body") `elemAt` 0
      onEvent KeyDown body $ \ev =>
@@ -169,7 +174,7 @@ onKeyDown prompt =
                                         -}
                   Nothing         => pure 1
 
-main : IO ()
+main : JS_IO ()
 main =
   do p <- newElement "p"
      setText p "hello!"
@@ -192,3 +197,4 @@ main =
 -- Local Variables:
 -- idris-packages: ("effects" "lightyear" "iquery")
 -- End:
+-}

@@ -1,23 +1,30 @@
 module Model
 
+import Effects
 import Effect.State
 import Effect.Exception
 import Parser
 import Stackulator
+import Lightyear.Strings
 
+public export
 Stack : Type
 Stack = List (Term, Term)
 
-record Model : Type where
-  MkModel : (context : Context) -> (stack : Stack) -> Model
+public export
+record Model where
+  constructor MkModel
+  context : Context
+  stack : Stack
 
 initialModel : Model
 initialModel = MkModel emptyContext []
 
+public export
 ModelEff : Type -> Type
-ModelEff t = { [EXCEPTION String, STATE Model] } Eff t
+ModelEff t = Eff t [EXCEPTION String, STATE Model]
 
-push : Term -> ModelEff ()
+push : Term -> Eff () [EXCEPTION String, STATE Model]
 push term =
   do (MkModel ctx terms) <- get
      case runInfer ctx term of
@@ -86,7 +93,4 @@ apply =
 -- Local Variables:
 -- idris-packages: ("effects" "lightyear")
 -- End:
- 
- 
- 
- 
+
