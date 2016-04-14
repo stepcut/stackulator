@@ -33,6 +33,13 @@ doLet v term =
        (Right ty) => do put (MkModel (extend v ty (Just term) ctx) terms)
                         pure ()
 
+
+export
+doAssume : Var -> Term -> ModelEff ()
+doAssume v term =
+  do (MkModel ctx terms) <- get
+     put (MkModel (extend v term Nothing ctx) terms)
+
 export
 push : Term -> ModelEff ()
 push term =
@@ -75,7 +82,7 @@ pushString s =
            (Right statement) =>
              case statement of
                (Let v term) => doLet v term
---               (Assume v term) => doAssume v term
+               (Assume v term) => doAssume v term
                (STerm term) => push term
 
 export
