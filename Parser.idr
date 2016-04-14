@@ -41,11 +41,11 @@ import Data.List
 import Lightyear.Core
 import Lightyear.Char
 import Lightyear.Combinators
-import Lightyear.Strings
+import public Lightyear.Strings
 import Stackulator
-import Effects 
+import Effects
 
-import Control.Monad.Identity
+-- import Control.Monad.Identity
 
 %access public export
 

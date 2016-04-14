@@ -1,11 +1,11 @@
 module Model
 
-import Effects
 import Effect.State
 import Effect.Exception
+import public Effects
 import Parser
 import Stackulator
-import Lightyear.Strings
+-- import Lightyear.Strings
 
 public export
 Stack : Type
@@ -24,6 +24,7 @@ public export
 ModelEff : Type -> Type
 ModelEff t = Eff t [EXCEPTION String, STATE Model]
 
+export
 push : Term -> Eff () [EXCEPTION String, STATE Model]
 push term =
   do (MkModel ctx terms) <- get
@@ -31,6 +32,7 @@ push term =
           (Left err) => raise err
           (Right ty) => put (MkModel ctx ((term, ty) :: terms))
 
+export
 drop : ModelEff ()
 drop =
   do (MkModel ctx terms) <- get
@@ -38,6 +40,7 @@ drop =
        (t::ts) => put (MkModel ctx ts)
        _       => raise "empty stack"
 
+export
 swap : ModelEff ()
 swap =
   do (MkModel ctx terms) <- get
@@ -45,6 +48,7 @@ swap =
        (t1::t2::ts) => put (MkModel ctx (t2::t1::ts))
        _            => raise "not enough elements on the stack"
 
+export
 dup : ModelEff ()
 dup =
   do (MkModel ctx terms) <- get
@@ -52,6 +56,7 @@ dup =
       (t::terms') => put (MkModel ctx (t::t::terms'))
       []          => raise "empty stack"
 
+export
 pushString : String -> ModelEff ()
 pushString s =
   if s == ""
@@ -60,6 +65,7 @@ pushString s =
            (Left err)   => raise err
            (Right term) => push term
 
+export
 apply : ModelEff ()
 apply =
   do (MkModel ctx terms) <- get
@@ -71,6 +77,7 @@ apply =
               (Right ty) => put (MkModel ctx ((t, ty) :: xs))
       _ => raise "Not enough terms on the stack"
 
+export
 eval : ModelEff ()
 eval =
   do (MkModel ctx terms) <- get
@@ -93,4 +100,3 @@ apply =
 -- Local Variables:
 -- idris-packages: ("effects" "lightyear")
 -- End:
-

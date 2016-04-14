@@ -1,12 +1,12 @@
 module Main
 
-import Control.Monad.Identity
+import public Control.Monad.Identity
 import Effects
 import Effect.State
 import Effect.Exception
 import IQuery
 import IQuery.Elements
-import IQuery.Event
+import public IQuery.Event
 import IQuery.Key
 import Model
 import Stackulator
@@ -66,13 +66,15 @@ renderModel (MkModel _ stack) =
       clearError
       traverse_ (renderStackElem stackDiv) (reverse stack)
 
+pushNget : String -> ModelEff Model
+pushNget str = do pushString str
+                  get
+
 enter : Element -> Event -> JS_IO Int
 enter prompt ev =
   do model <- getModel
      str <- getValue prompt
-     let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
-                     do pushString str
-                        get
+     let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) (pushNget str)
      case eModel' of
        (Left err) => do reportError err
                         pure 1
@@ -81,13 +83,16 @@ enter prompt ev =
             renderModel model'
             putModel model'
             pure 1
-{-
+
+
+applyNget : ModelEff Model
+applyNget = do apply
+               get
+
 app : Event -> JS_IO Int
 app ev =
   do model <- getModel
-     let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
-                     do apply
-                        get
+     let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) applyNget
      case eModel' of
        (Left err) => do reportError err
                         pure 1
@@ -166,6 +171,7 @@ onKeyDown prompt =
                                   KeyS => do cmd' swap
                                 preventDefault ev
                                 pure 0
+
 {-
                   (Just k)        => do c <- keyToChar k
                                         appendText prompt c
@@ -193,7 +199,7 @@ main =
      onClick dropButton  (cmd drop)
      onClick swapButton  (cmd swap)
 
+     pure ()
 -- Local Variables:
 -- idris-packages: ("effects" "lightyear" "iquery")
 -- End:
--}

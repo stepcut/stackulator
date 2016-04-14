@@ -2,7 +2,7 @@ module Stackulator
 
 -- http://math.andrej.com/2012/11/08/how-to-implement-dependent-type-theory-i/
 
-import Control.Monad.State
+-- import Control.Monad.State
 import Data.SortedMap
 import Effects
 import Effect.State
@@ -110,6 +110,7 @@ emptyContext : Context
 emptyContext =
   Ctx empty
 
+public export
 preludeContext : Context
 preludeContext = Ctx $ fromList
  [ (Name "Nat", (Universe 0, Nothing))
