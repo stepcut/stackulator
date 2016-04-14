@@ -158,6 +158,36 @@ pTerm = pPrim <|> pUniverse <|> pPi <|> pLit <|> pTVar <|> pLambda <|> pApp
 instance Show Term where
   show t = ppTerm t
 
+pLet : Parser Statement
+pLet =
+     string "let " >!
+       do v <- pVar
+          space
+          char '='
+          space
+          t <- pTerm
+          commitTo $ return $ Let v t
+
+pAssume : Parser Statement
+pAssume =
+     string "assume " >!
+       do v <- pVar
+          space
+          char ':'
+          space
+          t <- pTerm
+          commitTo $ return $ Assume v t
+
+pForget : Parser Statement
+pForget =
+  string "forget " >!
+    do v <- pVar
+       commitTo $ return $ Forget v
+
+pStatement : Parser Statement
+pStatement =
+ pLet <|> pAssume <|> pForget <|> (pure STerm <$> pTerm)
+
 ||| run a `Parser` ensuring that the entire `String` is consumed
 parseAll : Parser a -> String -> Either String a
 parseAll f s = let Id r = execParserT f s in case r of
@@ -167,6 +197,10 @@ parseAll f s = let Id r = execParserT f s in case r of
      _ => Left $ "Incomplete parse: " ++ i
   Failure es  => Left $ formatError s es
 
+prs : Parser Term -> String -> String
+prs p str = case parseAll p str of
+          (Right e)  => ppTerm e
+          (Left err) => err
 
 ||| run a `Parser` on a `String` and show the results
 testp : (Show a) => Parser a -> String -> IO ()

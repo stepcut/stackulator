@@ -55,17 +55,46 @@ renderStackElem parent (e, ty) =
 
     appendChild parent rowDiv
 
+renderContextElem : Element -> (Var, (Term, Maybe Term)) -> IO ()
+renderContextElem parent (v, (ty, me)) =
+ do rowDiv <- newElement "div"
+    setAttribute rowDiv "class" "row"
+    -- var
+    vDiv <- newElement "div"
+    setAttribute vDiv "class" "col-md-4"
+    setText vDiv (ppVar v)
+    appendChild rowDiv vDiv
+
+    -- expr
+    tDiv <- newElement "div"
+    setAttribute tDiv "class" "col-md-4"
+    case me of
+      (Just e) => setText tDiv (ppTerm e)
+      Nothing  => return ()
+    appendChild rowDiv tDiv
+
+    -- type
+    tyDiv <- newElement "div"
+    setAttribute tyDiv "class" "col-md-4"
+    setText tyDiv (ppTerm ty)
+    appendChild rowDiv tyDiv
+
+    appendChild parent rowDiv
+
 renderModel : Model -> IO ()
-renderModel (MkModel _ stack) =
+renderModel (MkModel (Ctx ctx) stack) =
    do Just stackDiv <- !(query "div#stack") `elemAt` 0
+      Just contextDiv <- !(query "div#context") `elemAt` 0
       innerHTML stackDiv ""
+      innerHTML contextDiv ""
       clearError
       traverse_ (renderStackElem stackDiv) (reverse stack)
+      traverse_ (renderContextElem contextDiv) (reverse $ toList ctx)
 
 enter : Element -> Event -> IO Int
 enter prompt ev =
   do model <- getModel
-     str <- getValue prompt
+     str   <- getValue prompt
      let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
                      do pushString str
                         get
@@ -175,6 +204,7 @@ main =
      setText p "hello!"
      Just prompt      <- !(query "input#prompt") `elemAt` 0
      Just enterButton <- !(query "input#enter")  `elemAt` 0
+
      Just applyButton <- !(query "input#apply")  `elemAt` 0
      Just evalButton  <- !(query "input#eval")   `elemAt` 0
      Just swapButton  <- !(query "input#swap")   `elemAt` 0
@@ -189,6 +219,7 @@ main =
      onClick dropButton  (cmd drop)
      onClick swapButton  (cmd swap)
 
+     return ()
 -- Local Variables:
 -- idris-packages: ("effects" "lightyear" "iquery")
 -- End:

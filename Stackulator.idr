@@ -67,15 +67,27 @@ data Term : Type where
   Prim     : Primitive -> Term
 
 ppTerm : Term -> String
-ppTerm  (TVar v) = ppVar v
--- ppTerm (Lit l) = ppLiteral l
-ppTerm (Universe Z) = "Type"
-ppTerm (Universe n) = "Type " ++ show n
-ppTerm (Pi v a b) = "forall " ++ ppVar v ++ " : " ++ ppTerm a ++ ". " ++ ppTerm b
-ppTerm (Lambda v x y) = "\\" ++ ppVar v ++ " : " ++ ppTerm x ++ " => " ++ ppTerm y
-ppTerm (App f x) = "(" ++ ppTerm f ++ " " ++ ppTerm x ++ ")"
-ppTerm (Lit lit) = ppLiteral lit
-ppTerm (Prim p) = ppPrimitive p
+ppTerm  (TVar v)      = ppVar v
+ppTerm (Universe Z)   = "Type"
+ppTerm (Universe n)   = "Type " ++ show n
+ppTerm (Pi v a b)     = "forall " ++ ppVar v ++ " : " ++ ppTerm a ++ ". " ++ ppTerm b
+ppTerm (Lambda v x y) = "(\\" ++ ppVar v ++ " : " ++ ppTerm x ++ " => " ++ ppTerm y ++ ")"
+ppTerm (App f x)      = ppTerm f ++ " " ++ ppTerm x
+ppTerm (Lit lit)      = ppLiteral lit
+ppTerm (Prim p)       = ppPrimitive p
+
+data Statement : Type where
+     Let     : Var  -> Term -> Statement
+     Assume  : Var  -> Term -> Statement
+     Forget  : Var  -> Statement
+     STerm   : Term -> Statement
+
+||| pretty-print a `Statement`
+ppStatement : Statement -> String
+ppStatement (Let v t)    = "let "    ++ ppVar v ++ " = " ++ ppTerm t
+ppStatement (Assume v t) = "assume " ++ ppVar v ++ " : " ++ ppTerm t
+ppStatement (Forget v)   = "forget " ++ ppVar v
+ppStatement (STerm t)    = ppTerm t
 
 inc : InferEff Int
 inc =
@@ -106,7 +118,7 @@ preludeContext = Ctx $ fromList
  , (Name "s", (Pi Dummy (TVar (Name "Nat")) (TVar (Name "Nat")), Nothing))
  , (Name "three", (TVar (Name "Nat"), Just (App (TVar (Name "s")) (App (TVar (Name "s")) (App (TVar (Name "s")) (TVar (Name "z")))))))
  , (Name "Double", (Universe 0, Nothing))
- , (Name "id", (Pi (Name "a") (Universe 0) (Pi (Name "x") (TVar (Name "a")) (TVar (Name "x"))), Just (Lambda (Name "a") (Universe 0) (Lambda (Name "x") (TVar (Name "a")) (TVar (Name "x"))))))
+ , (Name "id", (Pi (Name "a") (Universe 0) (Pi (Name "x") (TVar (Name "a")) (TVar (Name "a"))), Just (Lambda (Name "a") (Universe 0) (Lambda (Name "x") (TVar (Name "a")) (TVar (Name "x"))))))
  ]
 
 pc : SortedMap Var (Term, Maybe Term)

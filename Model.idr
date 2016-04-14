@@ -17,6 +17,13 @@ initialModel = MkModel emptyContext []
 ModelEff : Type -> Type
 ModelEff t = { [EXCEPTION String, STATE Model] } Eff t
 
+doLet : Var -> Term -> ModelEff ()
+doLet v term =
+  do (MkModel ctx terms) <- get
+     case runInfer ctx term of
+       (Left err) => raise err
+       (Right ty) => put (MkModel (extend v ty (Just term) ctx) terms)
+
 push : Term -> ModelEff ()
 push term =
   do (MkModel ctx terms) <- get
@@ -49,9 +56,13 @@ pushString : String -> ModelEff ()
 pushString s =
   if s == ""
     then dup
-    else case parseAll pTerm s of
+    else case parseAll pStatement s of
            (Left err)   => raise err
-           (Right term) => push term
+           (Right statement) =>
+             case statement of
+               (Let v term) => doLet v term
+--               (Assume v term) => doAssume v term
+               (STerm term) => push term
 
 apply : ModelEff ()
 apply =
