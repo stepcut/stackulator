@@ -61,7 +61,7 @@ reserved = ["let", "forall", "=>", "Type"]
 ||| parse a `Var`
 pVar : Parser Var
 pVar =
-  do v <- pure pack <*!> (some $ satisfy (\c => not (c `elem` specials)))
+  do v <- pack <$> (some $ satisfy (\c => not (c `elem` specials)))
      if (v `elem` reserved)
       then fail $ v ++ " is a reserved keyword"
       else commitTo (return (Name v))
@@ -69,7 +69,7 @@ pVar =
 
 ||| parse a `Var` and lift it to a `Term`
 pTVar : Parser Term
-pTVar = pure TVar <*!> pVar
+pTVar = TVar <$> pVar
 
 -- ||| skip 
 -- manySpace : Parser ()
@@ -91,19 +91,19 @@ pLiteral = pDouble
 
 ||| parse a `Literal` and lift it to a `Term`
 pLit : Parser Term
-pLit = pure Lit <*!> pLiteral
+pLit = Lit <$> pLiteral
 
 ||| parse `Primitive`
 pPrimitive : Parser Primitive
 pPrimitive =
-        ((char '+') *!> pure Plus)  <|>
-        ((char '-') *!> pure Minus) <|>
-        ((char '*') *!> pure Times) <|>
-        ((char '/') *!> pure Divide)
+        ((char '+') >! pure Plus)  <|>
+        ((char '-') >! pure Minus) <|>
+        ((char '*') >! pure Times) <|>
+        ((char '/') >! pure Divide)
 
 ||| parse `Primitive` and lift to `Term`
 pPrim : Parser Term
-pPrim = pure Prim <*!> pPrimitive
+pPrim = Prim <$> pPrimitive
 
 
 ||| parse a `Universe` `Term`
@@ -163,6 +163,36 @@ pTerm = pPrim <|> pUniverse <|> pPi <|> pLit <|> pTVar <|> pLambda <|> pApp
 implementation Show Term where
   show t = ppTerm t
 
+pLet : Parser Statement
+pLet =
+     string "let " >!
+       do v <- pVar
+          space
+          char '='
+          space
+          t <- pTerm
+          commitTo $ return $ Let v t
+
+pAssume : Parser Statement
+pAssume =
+     string "assume " >!
+       do v <- pVar
+          space
+          char ':'
+          space
+          t <- pTerm
+          commitTo $ return $ Assume v t
+
+pForget : Parser Statement
+pForget =
+  string "forget " >!
+    do v <- pVar
+       commitTo $ return $ Forget v
+
+pStatement : Parser Statement
+pStatement =
+ pLet <|> pAssume <|> pForget <|> (STerm <$> pTerm)
+
 ||| run a `Parser` ensuring that the entire `String` is consumed
 public export
 parseAll : Parser a -> String -> Either String a
@@ -171,8 +201,12 @@ parseAll f s = let Id r = execParserT f s in case r of
     case length i of
      Z => Right x
      _ => Left $ "Incomplete parse: " ++ i
-  Failure es  => Left "Parsing error" -- Left $ formatError s es
+  Failure es  => Left $ show es
 
+prs : Parser Term -> String -> String
+prs p str = case parseAll p str of
+          (Right e)  => ppTerm e
+          (Left err) => err
 
 ||| run a `Parser` on a `String` and show the results
 testp : (Show a) => Parser a -> String -> IO ()

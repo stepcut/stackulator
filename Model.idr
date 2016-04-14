@@ -1,6 +1,6 @@
 module Model
 
-import Effect.State
+import public Effect.State
 import Effect.Exception
 import public Effects
 import Parser
@@ -25,7 +25,16 @@ ModelEff : Type -> Type
 ModelEff t = Eff t [EXCEPTION String, STATE Model]
 
 export
-push : Term -> Eff () [EXCEPTION String, STATE Model]
+doLet : Var -> Term -> ModelEff ()
+doLet v term =
+  do (MkModel ctx terms) <- get
+     case runInfer ctx term of
+       (Left err) => raise err
+       (Right ty) => do put (MkModel (extend v ty (Just term) ctx) terms)
+                        pure ()
+
+export
+push : Term -> ModelEff ()
 push term =
   do (MkModel ctx terms) <- get
      case runInfer ctx term of
@@ -61,9 +70,13 @@ pushString : String -> ModelEff ()
 pushString s =
   if s == ""
     then dup
-    else case parseAll pTerm s of
+    else case parseAll pStatement s of
            (Left err)   => raise err
-           (Right term) => push term
+           (Right statement) =>
+             case statement of
+               (Let v term) => doLet v term
+--               (Assume v term) => doAssume v term
+               (STerm term) => push term
 
 export
 apply : ModelEff ()
