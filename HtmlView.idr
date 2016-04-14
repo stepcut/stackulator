@@ -70,7 +70,6 @@ enter : Element -> Event -> JS_IO Int
 enter prompt ev =
   do model <- getModel
      str <- getValue prompt
-     a <- runInit () ()
      let eModel' = the (Either String Model) $ runInit (() :: model :: Nil) $
                      do pushString str
                         get
