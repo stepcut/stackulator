@@ -124,11 +124,11 @@ pPi =
   string "forall " >!
        do space
           v <- pVar
-          space
+          many space
           colon
           ty <- pTerm
           dot
-          space
+          many space
           e <- pTerm
           return (Pi v ty e)
 
@@ -136,16 +136,16 @@ pPi =
 pLambda : Parser Term
 
 pLambda =
-  do -- string "\\"
-     vtys <- commitTo $ some $ do space
-                                  v <- pVar <*! space
+  do string "\\"
+     vtys <- commitTo $ some $ do many space
+                                  v <- pVar <* many space
                                   colon
                                   ty <- commitTo $ pTerm
                                   pure (v, ty)
-     space
+     many space
 --     string "=>"
      commitTo $ char '.'
-     space
+     many space
      e <- commitTo pTerm
      return (foldr (\(v,ty) => \e' =>  Lambda v ty e') e vtys)
 
@@ -167,9 +167,9 @@ pLet : Parser Statement
 pLet =
      string "let " >!
        do v <- pVar
-          space
+          many space
           char '='
-          space
+          many space
           t <- pTerm
           commitTo $ return $ Let v t
 
@@ -177,9 +177,9 @@ pAssume : Parser Statement
 pAssume =
      string "assume " >!
        do v <- pVar
-          space
+          many space
           char ':'
-          space
+          many space
           t <- pTerm
           commitTo $ return $ Assume v t
 
